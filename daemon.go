@@ -133,16 +133,15 @@ func (s *Daemon) Start(ctx context.Context) error {
 	s.grpcSrvs = append(s.grpcSrvs, grpc.NewServer(opts...))
 
 	// Registers a new gubernator instance with the GRPC server
-	s.gubeConfig = Config{
+	s.V1Server, err = NewV1Instance(Config{
 		PeerTLS:      s.conf.ClientTLS(),
-		DataCenter:   s.conf.DataCenter,
+		ClusterName:  s.conf.ClusterName,
+		Behaviors:    s.conf.Behaviors,
 		LocalPicker:  s.conf.Picker,
+		CacheFactory: cacheFactory,
 		GRPCServers:  s.grpcSrvs,
 		Logger:       s.log,
-		CacheFactory: cacheFactory,
-		Behaviors:    s.conf.Behaviors,
-	}
-	s.V1Server, err = NewV1Instance(s.gubeConfig)
+	})
 	if err != nil {
 		return errors.Wrap(err, "while creating new gubernator instance")
 	}

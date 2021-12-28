@@ -34,7 +34,7 @@ func newMultiRegionManager(conf BehaviorConfig, instance *V1Instance) *mutliRegi
 		conf:     conf,
 		instance: instance,
 		log:      instance.log,
-		reqQueue: make(chan *RateLimitReq, conf.MultiRegionBatchLimit),
+		reqQueue: make(chan *RateLimitReq, conf.MultiClusterBatchLimit),
 	}
 	mm.runAsyncReqs()
 	return &mm
@@ -46,7 +46,7 @@ func (mm *mutliRegionManager) QueueHits(r *RateLimitReq) {
 }
 
 func (mm *mutliRegionManager) runAsyncReqs() {
-	var interval = NewInterval(mm.conf.MultiRegionSyncWait)
+	var interval = NewInterval(mm.conf.MultiClusterSyncWait)
 	hits := make(map[string]*RateLimitReq)
 
 	mm.wg.Until(func(done chan struct{}) bool {
@@ -63,7 +63,7 @@ func (mm *mutliRegionManager) runAsyncReqs() {
 			}
 
 			// Send the hits if we reached our batch limit
-			if len(hits) == mm.conf.MultiRegionBatchLimit {
+			if len(hits) == mm.conf.MultiClusterBatchLimit {
 				for dc, picker := range mm.instance.GetRegionPickers() {
 					mm.log.Debugf("Sending %v hit(s) to %s picker", len(hits), dc)
 					mm.sendHits(hits, picker)
