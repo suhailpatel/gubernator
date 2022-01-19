@@ -44,71 +44,77 @@ const (
 type V1Instance struct {
 	UnimplementedV1Server
 	UnimplementedPeersV1Server
-	broadcast            *broadcastManager
+
 	remoteCluster        *remoteClusterManager
-	peerMutex            sync.RWMutex
 	log                  logrus.FieldLogger
-	conf                 Config
-	isClosed             bool
-	getRateLimitsCounter int64
+	broadcast            *broadcastManager
 	gubernatorPool       *GubernatorPool
+	peerMutex            sync.RWMutex
+	conf                 Config
+	getRateLimitsCounter int64
+	isClosed             bool
 }
 
-var getRateLimitCounter = prometheus.NewCounterVec(prometheus.CounterOpts{
-	Name: "gubernator_getratelimit_counter",
-	Help: "The count of getRateLimit() calls.  Label \"calltype\" may be \"local\" for calls handled by the same peer, \"forward\" for calls forwarded to another peer, or \"global\" for global rate limits.",
-}, []string{"calltype"})
-var funcTimeMetric = prometheus.NewSummaryVec(prometheus.SummaryOpts{
-	Name: "gubernator_func_duration",
-	Help: "The timings of key functions in Gubernator in seconds.",
-	Objectives: map[float64]float64{
-		0.99: 0.001,
-	},
-}, []string{"name"})
-var asyncRequestRetriesCounter = prometheus.NewCounterVec(prometheus.CounterOpts{
-	Name: "gubernator_asyncrequest_retries",
-	Help: "The count of retries occurred in asyncRequests() forwarding a request to another peer.",
-}, []string{"name"})
-var queueLengthMetric = prometheus.NewSummaryVec(prometheus.SummaryOpts{
-	Name: "gubernator_queue_length",
-	Help: "The getRateLimitsBatch() queue length in PeerClient.  This represents rate checks queued by for batching to a remote peer.",
-	Objectives: map[float64]float64{
-		0.99: 0.001,
-	},
-}, []string{"peerAddr"})
-var checkCounter = prometheus.NewCounter(prometheus.CounterOpts{
-	Name: "gubernator_check_counter",
-	Help: "The number of rate limits checked.",
-})
-var overLimitCounter = prometheus.NewCounter(prometheus.CounterOpts{
-	Name: "gubernator_over_limit_counter",
-	Help: "The number of rate limit checks that are over the limit.",
-})
-var concurrentChecksMetric = prometheus.NewSummary(prometheus.SummaryOpts{
-	Name: "gubernator_concurrent_checks_counter",
-	Help: "The number of concurrent GetRateLimits API calls.",
-	Objectives: map[float64]float64{
-		0.99: 0.001,
-	},
-})
-var checkErrorCounter = prometheus.NewCounterVec(prometheus.CounterOpts{
-	Name: "gubernator_check_error_counter",
-	Help: "The number of errors while checking rate limits.",
-}, []string{"error"})
-var poolWorkerQueueLength = prometheus.NewSummaryVec(prometheus.SummaryOpts{
-	Name: "gubernator_pool_queue_length",
-	Help: "The number of GetRateLimit requests queued up in GubernatorPool workers.",
-	Objectives: map[float64]float64{
-		0.99: 0.001,
-	},
-}, []string{"method", "worker"})
-var batchSendDurationMetric = prometheus.NewSummaryVec(prometheus.SummaryOpts{
-	Name: "gubernator_batch_send_duration",
-	Help: "The timings of batch send operations to a remote peer.",
-	Objectives: map[float64]float64{
-		0.99: 0.001,
-	},
-}, []string{"peerAddr"})
+var (
+	getRateLimitCounter = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Name: "gubernator_getratelimit_counter",
+		Help: "The count of getRateLimit() calls.  Label \"calltype\" may be \"local\" for calls handled by the same" +
+			" peer, \"forward\" for calls forwarded to another peer, or \"global\" for global rate limits.",
+	}, []string{"calltype"})
+
+	funcTimeMetric = prometheus.NewSummaryVec(prometheus.SummaryOpts{
+		Name: "gubernator_func_duration",
+		Help: "The timings of key functions in Gubernator in seconds.",
+		Objectives: map[float64]float64{
+			0.99: 0.001,
+		},
+	}, []string{"name"})
+	asyncRequestRetriesCounter = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Name: "gubernator_asyncrequest_retries",
+		Help: "The count of retries occurred in asyncRequests() forwarding a request to another peer.",
+	}, []string{"name"})
+	queueLengthMetric = prometheus.NewSummaryVec(prometheus.SummaryOpts{
+		Name: "gubernator_queue_length",
+		Help: "The getRateLimitsBatch() queue length in PeerClient.  This represents rate checks queued by for" +
+			" batching to a remote peer.",
+		Objectives: map[float64]float64{
+			0.99: 0.001,
+		},
+	}, []string{"peerAddr"})
+	checkCounter = prometheus.NewCounter(prometheus.CounterOpts{
+		Name: "gubernator_check_counter",
+		Help: "The number of rate limits checked.",
+	})
+	overLimitCounter = prometheus.NewCounter(prometheus.CounterOpts{
+		Name: "gubernator_over_limit_counter",
+		Help: "The number of rate limit checks that are over the limit.",
+	})
+	concurrentChecksMetric = prometheus.NewSummary(prometheus.SummaryOpts{
+		Name: "gubernator_concurrent_checks_counter",
+		Help: "The number of concurrent GetRateLimits API calls.",
+		Objectives: map[float64]float64{
+			0.99: 0.001,
+		},
+	})
+	checkErrorCounter = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Name: "gubernator_check_error_counter",
+		Help: "The number of errors while checking rate limits.",
+	}, []string{"error"})
+	poolWorkerQueueLength = prometheus.NewSummaryVec(prometheus.SummaryOpts{
+		Name: "gubernator_pool_queue_length",
+		Help: "The number of GetRateLimit requests queued up in GubernatorPool workers.",
+		Objectives: map[float64]float64{
+			0.99: 0.001,
+		},
+	}, []string{"method", "worker"})
+	batchSendDurationMetric = prometheus.NewSummaryVec(prometheus.SummaryOpts{
+		Name: "gubernator_batch_send_duration",
+		Help: "The timings of batch send operations to a remote peer.",
+		Objectives: map[float64]float64{
+			0.99: 0.001,
+		},
+	}, []string{"peerAddr"})
+)
 
 // NewV1Instance instantiate a single instance of a gubernator peer and registers this
 // instance with the provided GRPCServer.
@@ -493,8 +499,6 @@ func (s *V1Instance) UpdatePeerGlobals(ctx context.Context, r *UpdatePeerGlobals
 // UpdateRateLimits updates the local cache with a list of rate limits from another cluster
 func (s *V1Instance) UpdateRateLimits(ctx context.Context, r *UpdateRateLimitsReq) (*UpdateRateLimitsResp, error) {
 	log := s.log.WithField("method", "UpdateRateLimits()")
-	s.conf.Cache.Lock()
-	defer s.conf.Cache.Unlock()
 
 	var prl GetPeerRateLimitsReq
 	for _, rl := range r.RateLimits {
@@ -507,7 +511,7 @@ func (s *V1Instance) UpdateRateLimits(ctx context.Context, r *UpdateRateLimitsRe
 		if !HasBehavior(rl.Behavior, Behavior_HASH_COMPUTED) {
 			// Verify we own this rate limit as we could be receiving a batch of rate limits we don't own.
 			key := rl.Name + "_" + rl.UniqueKey
-			peer, err := s.GetPeer(key)
+			peer, err := s.GetPeer(ctx, key)
 			if err != nil {
 				log.WithError(err).Errorf("while creating rate limit")
 				continue
@@ -678,7 +682,7 @@ func (s *V1Instance) getRateLimit(ctx context.Context, r *RateLimitReq) (*RateLi
 
 	if r.Replica != "" {
 		s.remoteCluster.QueueHits(r)
-		tracing.LogInfo(span, "s.mutliCluster.QueueHits(r)")
+		tracing.LogInfo(span, "s.remoteCluster.QueueHits(r)")
 	}
 
 	resp, err := s.gubernatorPool.GetRateLimit(ctx, r)

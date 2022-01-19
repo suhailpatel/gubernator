@@ -52,6 +52,8 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
+// TODO: Rename this to CachePool, GubernatorPool sounds like it's a pool of gubernator instances
+
 type GubernatorPool struct {
 	workers         []*poolWorker
 	workerCacheSize int
@@ -133,7 +135,7 @@ func NewGubernatorPool(conf *Config, concurrency int, cacheSize int) *Gubernator
 		workers:         make([]*poolWorker, concurrency),
 		workerCacheSize: cacheSize / concurrency,
 		hasher:          newPoolHasher(),
-		hashRingStep:    uint64(1 << 63) / uint64(concurrency),
+		hashRingStep:    uint64(1<<63) / uint64(concurrency),
 		conf:            conf,
 		done:            make(chan struct{}),
 	}
