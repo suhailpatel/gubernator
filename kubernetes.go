@@ -163,11 +163,11 @@ func (e *K8sPool) startPodWatch() error {
 	listWatch := &cache.ListWatch{
 		ListFunc: func(options meta_v1.ListOptions) (runtime.Object, error) {
 			options.LabelSelector = e.conf.Selector
-			return e.client.CoreV1().Pods(e.conf.Namespace).List(context.Background(), options)
+			return e.client.CoreV1().Pods(e.conf.Namespace).List(options)
 		},
 		WatchFunc: func(options meta_v1.ListOptions) (watch.Interface, error) {
 			options.LabelSelector = e.conf.Selector
-			return e.client.CoreV1().Pods(e.conf.Namespace).Watch(e.watchCtx, options)
+			return e.client.CoreV1().Pods(e.conf.Namespace).Watch(options)
 		},
 	}
 	return e.startGenericWatch(&api_v1.Pod{}, listWatch, e.updatePeersFromPods)
@@ -177,11 +177,11 @@ func (e *K8sPool) startEndpointWatch() error {
 	listWatch := &cache.ListWatch{
 		ListFunc: func(options meta_v1.ListOptions) (runtime.Object, error) {
 			options.LabelSelector = e.conf.Selector
-			return e.client.CoreV1().Endpoints(e.conf.Namespace).List(context.Background(), options)
+			return e.client.CoreV1().Endpoints(e.conf.Namespace).List(options)
 		},
 		WatchFunc: func(options meta_v1.ListOptions) (watch.Interface, error) {
 			options.LabelSelector = e.conf.Selector
-			return e.client.CoreV1().Endpoints(e.conf.Namespace).Watch(e.watchCtx, options)
+			return e.client.CoreV1().Endpoints(e.conf.Namespace).Watch(options)
 		},
 	}
 	return e.startGenericWatch(&api_v1.Endpoints{}, listWatch, e.updatePeersFromEndpoints)
